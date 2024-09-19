@@ -40,6 +40,12 @@ jobs:
       - name: Build Android APK
         run: flutter build apk
 
+
+      - name: Upload app to AppSweep with Gradle
+        env:
+          APPSWEEP_API_KEY: ${{ secrets.APPSWEEP_API_KEY }}
+        run: cd android && ./gradlew uploadToAppSweepRelease
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with:
