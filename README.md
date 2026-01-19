@@ -10,7 +10,7 @@ The android-registration-client repository contains the Android Registration Cli
 
 ## Setup
 
-To set up the Android Registration Client with Flutter and Android Studio, follow the steps below:
+To set up the Android Registrwation Client with Flutter and Android Studio, follow the steps below:
 
 #### Prerequisites
 
