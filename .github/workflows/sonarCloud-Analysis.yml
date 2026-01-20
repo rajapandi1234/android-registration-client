@@ -36,7 +36,8 @@ jobs:
         run: flutter pub get
 
       - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
+        run: chmod +x ./gradlew
+        working-directory: android
 
       - name: Run Unit Tests with Coverage
         working-directory: android
