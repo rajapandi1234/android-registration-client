@@ -22,41 +22,59 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Java (required by Gradle & Sonar)
+      # Setup Java 17 (required for Gradle & Sonar)
       - name: Setup Java 17
         uses: actions/setup-java@v3
         with:
           distribution: zulu
           java-version: 17
 
-      # Flutter (required to generate Android intermediates)
+      # Setup Flutter (required to generate Android intermediates)
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.10.4'
 
+      # Install Flutter dependencies
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      # IMPORTANT: This generates libs.jar required by Android + Sonar
+      # Generate Flutter Android intermediates (needed for Gradle/Sonar)
       - name: Generate Flutter Android intermediates
         run: flutter build apk --debug --no-pub
 
-      # Gradle wrapper permission
+      # Grant execute permission to gradlew
       - name: Grant execute permission to gradlew
         working-directory: android
         run: chmod +x gradlew
 
-      # SonarCloud analysis (skip tests, keep Android analysis)
+      # Run unit tests with coverage, skipping heavy modules
+      - name: Run Unit Tests with Coverage
+        working-directory: android
+        run: |
+          ./gradlew testDebugUnitTestCoverage \
+            -x image_picker_android:testDebugUnitTest \
+            -x webview_flutter_android:testDebugUnitTest
+
+      # Generate Jacoco XML report
+      - name: Generate Jacoco Test Report
+        working-directory: android
+        run: |
+          ./gradlew jacocoTestReport \
+            -x image_picker_android:testDebugUnitTest \
+            -x webview_flutter_android:testDebugUnitTest
+
+      # Run SonarCloud analysis
       - name: Run SonarCloud Analysis
         working-directory: android
         env:
-          SONAR_TOKEN: 13c9437b3fa54b66de5ec14c4fc2bd04fb55ae77
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           ./gradlew sonar \
+            -x image_picker_android:testDebugUnitTest \
+            -x webview_flutter_android:testDebugUnitTest \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.organization=test-integrations \
             -Dsonar.projectKey=rajapandi1234_android-registration-client \
-            -x testDebugUnitTest \
-            -x image_picker_android:testDebugUnitTest \
-            -x webview_flutter_android:testDebugUnitTest
+            -Dsonar.coverage.jacoco.xmlReportPaths=**/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml \
+            -Dsonar.exclusions=**/image_picker_android/**,**/webview_flutter_android/**
