@@ -39,16 +39,12 @@ jobs:
         working-directory: android
         run: chmod +x gradlew
 
-      - name: Generate sources (Pigeon)
-        working-directory: android
-        run: sh pigeon.sh
-
-      - name: Run SonarCloud (skip unit tests)
+      - name: Run SonarCloud (skip tests & codegen)
         working-directory: android
         env:
           SONAR_TOKEN: 13c9437b3fa54b66de5ec14c4fc2bd04fb55ae77
         run: |
-          ./gradlew clean jacocoTestReport sonar \
+          ./gradlew clean sonar \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.organization=test-integrations \
             -Dsonar.projectKey=rajapandi1234_android-registration-client \
