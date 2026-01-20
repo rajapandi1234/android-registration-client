@@ -48,6 +48,7 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.organization=test-integrations \
             -Dsonar.projectKey=rajapandi1234_android-registration-client \
+            -Dsonar.gradle.skipCompile=true \
             -x testDebugUnitTest \
             -x compileDebugUnitTestJavaWithJavac \
             -x image_picker_android:testDebugUnitTest \
