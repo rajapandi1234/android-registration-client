@@ -66,3 +66,19 @@ jobs:
           name: apk-output
           path: ./build/app/outputs/flutter-apk/app-release.apk
           retention-days: 10
+
+      - name: Run tests and generate coverage
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest jacocoTestReport --no-daemon
+
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          cd android
+          export SONAR_HOST_URL=${SONAR_HOST_URL:-https://sonarcloud.io}
+          ./gradlew sonarqube --no-daemon
+        continue-on-error: true
