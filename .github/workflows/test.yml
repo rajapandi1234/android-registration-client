@@ -47,6 +47,7 @@ jobs:
 
       # 7️⃣ Compile Java only (optional)
       - name: Compile Java sources
+        working-directory: android
         run: ./gradlew compileDebugJavaWithJavac
 
       # 8️⃣ Full Android build (recommended)
