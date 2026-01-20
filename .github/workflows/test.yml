@@ -45,6 +45,10 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Make gradlew executable
+        working-directory: android
+        run: chmod +x gradlew
+      
       # 7️⃣ Compile Java only (optional)
       - name: Compile Java sources
         working-directory: android
