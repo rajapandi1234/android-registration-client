@@ -57,16 +57,6 @@ jobs:
       - name: Generate Pigeon / source folders
         run: sh pigeon.sh
 
-      # 🔐 Signing files kept but NOT REQUIRED for debug
-      - name: Decode keystore (optional)
-        if: ${{ secrets.JKS_PRIVATE_SECRET != '' }}
-        run: |
-          echo "${{ secrets.JKS_PRIVATE_SECRET }}" | base64 --decode > android/app/arc-local-keystore.jks
-
-      - name: Decode key.properties (optional)
-        if: ${{ secrets.KEY_PROPERTIES != '' }}
-        run: |
-          echo "${{ secrets.KEY_PROPERTIES }}" | base64 --decode > android/key.properties
 
       # ✅ ONLY CHANGE THAT MATTERS
       - name: Build Android APK (DEBUG – no signing)
