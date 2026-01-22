@@ -1,84 +1,160 @@
-name: Build Android Registration-Client
+name: Android CI – Debug + Sonar (No Signing)
 
 on:
   workflow_dispatch:
     inputs:
       serverBaseURL:
-        description: "Enter serverBaseURL for APK"
-        required: true
+        description: "Enter serverBaseURL"
+        required: false
         default: "https://api.default.example.com"
-        type: string
   push:
     branches:
-      - release*
       - develop
+      - release*
 
+env:
+  JAVA_VERSION: '17'
+  FLUTTER_VERSION: '3.10.4'
+
+# -------------------------------
+# JOB 1: PREPARE ENVIRONMENT
+# -------------------------------
 jobs:
-  build:
+  prepare:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      - name: Replace serverBaseURL in all build.gradle files
+      - name: Replace serverBaseURL (manual trigger only)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           find android -type f -name "build.gradle*" -print0 \
-          | xargs -0 sed -i "s#api-internal.sandbox.xyz.net#${{ github.event.inputs.serverBaseURL }}#g"
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        
-      - name: Setup java 17
-        uses: actions/setup-java@v2
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+          | xargs -0 sed -i "s#api-internal.sandbox.xyz.net#${{ inputs.serverBaseURL }}#g"
 
-      - name: Set up Flutter
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.10.4'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      - name: Install Dart SDK
+      - name: Flutter pub get
         run: flutter pub get
 
       - name: Flutter clean
         run: flutter clean
 
-      - name: Creating Folders for generated source code
-        run: |
-          sh pigeon.sh
+      - name: Generate pigeon sources
+        run: sh pigeon.sh
 
-      # - name: Flutter test
-      #   run: flutter test
+# -------------------------------
+# JOB 2: COMPILE DEBUG (NO RELEASE)
+# -------------------------------
+  compile-debug:
+    runs-on: ubuntu-latest
+    needs: prepare
 
-      - name: Decode android/app/arc-local-keystore.jks
-        run: echo "${{ secrets.JKS_PRIVATE_SECRET }}" | base64 --decode > android/app/arc-local-keystore.jks
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Decode android/key.properties
-        run: echo "${{ secrets.KEY_PROPERTIES }}" | base64 --decode > android/key.properties
-
-      - name: Build Android APK
-        run: flutter build apk
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/setup-java@v3
         with:
-          name: apk-output
-          path: ./build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 10
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Run tests and generate coverage
+      - name: Compile Debug Java/Kotlin ONLY
+        working-directory: android
         run: |
-          cd android
           chmod +x gradlew
-          ./gradlew testDebugUnitTest jacocoTestReport --no-daemon
+          ./gradlew \
+            compileDebugJavaWithJavac \
+            compileDebugKotlin \
+            -x image_picker_android:testDebugUnitTest \
+            -x webview_flutter_android:testDebugUnitTest \
+            --no-daemon
 
-      - name: SonarQube Analysis
+# -------------------------------
+# JOB 3: TESTS + COVERAGE
+# -------------------------------
+  tests-coverage:
+    runs-on: ubuntu-latest
+    needs: compile-debug
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Run Unit Tests & JaCoCo
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            testDebugUnitTest \
+            jacocoTestReport \
+            -x image_picker_android:testDebugUnitTest \
+            -x webview_flutter_android:testDebugUnitTest \
+            --no-daemon
+
+# -------------------------------
+# JOB 4: SONARQUBE ANALYSIS
+# -------------------------------
+  sonar:
+    runs-on: ubuntu-latest
+    needs: tests-coverage
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: SonarQube Scan (DEBUG only)
+        working-directory: android
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          cd android
-          export SONAR_HOST_URL=${SONAR_HOST_URL:-https://sonarcloud.io}
-          ./gradlew sonarqube --no-daemon
-        continue-on-error: true
+          chmod +x gradlew
+          ./gradlew sonarqube \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.java.binaries=app/build/intermediates/javac/debug/classes \
+            -Dsonar.gradle.skipCompile=true \
+            -x assemble \
+            -x assembleRelease \
+            --no-daemon
+
+# -------------------------------
+# JOB 5 (OPTIONAL): APK RELEASE
+# -------------------------------
+  apk-release:
+    if: false   # enable only when needed
+    runs-on: ubuntu-latest
+    needs: prepare
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.JKS_PRIVATE_SECRET }}" | base64 --decode > android/app/release.jks
+          echo "${{ secrets.KEY_PROPERTIES }}" | base64 --decode > android/key.properties
+
+      - name: Build signed APK
+        run: flutter build apk --release
